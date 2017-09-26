@@ -11,7 +11,7 @@ SRC	= signsupport.c getreport.c
 VHEADER = sign.h
 OBJ	= $(SRC:%.c=%.o)
 CFLAGS  += -g
-LFLAGS  += -lgmp
+LFLAGS  += -lgmp -lm
 
 BINS	= getreport
 
