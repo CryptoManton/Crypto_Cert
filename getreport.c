@@ -56,46 +56,6 @@ static void init_factors(void)
 }
 
 /*
-	Computes the greatest common devisor of a and b and saves it in gcd.
-*/
-static void Get_GCD(mpz_t gcd, mpz_t a, mpz_t b) {
-	int i;
-	for (i = 1; i <= mpz_get_ui(a) && mpz_get_ui(b); ++i) {
-		if (mpz_get_ui(a)%i==0 && mpz_get_ui(b)%i==0)
-			mpz_set_ui(gcd, i);
-	}
-	if (debug) 
-		printf("gcd(%d, %d) = %d.\n", mpz_get_ui(a), mpz_get_ui(b), mpz_get_ui(gcd));
-}
-
-/*
-	The extended euclidean algorithm computes a number c so that a * c [=] 1 mod b
-	Prerequisite: gcd(a, c) = 1
-*/
-static int Get_Inverse(int a, int b) {
-
-	int x[3], y[3];
-	int quotient = a / b;
-	int remain = a % b;
-
-	x[0] = 0;
-	y[0] = 1;
-	x[1] = 1;
-	y[1] = quotient * (-1);
-
-	int i;
-	for (i = 2; (b % (a%b)) != 0; i++) {
-		a = b;
-		b = remain;
-		quotient = a / b;
-		remain = a % b;
-		x[i%3] = (quotient * (-1) * x[(i-1)%3]) + x[(i-2)%3];
-		y[i%3] = (quotient * (-1) * y[(i-1)%3]) + y[(i-2)%3];
-	}
-	return x[(i-1)%3];
-}
-
-/*
  * babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i):
  *
  * Berechnet x_i so dass a_i = w_i ^ x_i mod p.
@@ -188,20 +148,24 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 	 *>>>>                                           <<<<*/
 
 	mpz_t k, gcd, p_1, k_1;
+	gmp_randstate_t gmpRandState; 
+
 	mpz_init(gcd);
 	mpz_set_ui(gcd, 0);
 	mpz_init(p_1);
 	mpz_set_ui(p_1, mpz_get_ui(p)-1);
 	mpz_init(k);
 	mpz_init(k_1);
-	srand(time(NULL));
-	mpz_set_ui(k, rand() % mpz_get_ui(p_1));
+
+	// lets random some
+	gmp_randinit_default(gmpRandState);
+	gmp_randseed_ui(gmpRandState, time(NULL));
 	
 	// A zieht eine Zufallszahl k mit k < p-1 und ggT(k, p-1) = 1
 	while(mpz_get_ui(gcd) != 1) {
 		mpz_set_ui(gcd, 0);
-		mpz_set_ui(k, rand() % mpz_get_ui(p_1));
-		Get_GCD(gcd, k, p_1);
+		mpz_urandomm(k, gmpRandState, p_1);
+		mpz_gcd(gcd, k, p_1);
 	}
 	if (debug)
 		printf("Found a k=%d\n", mpz_get_ui(k));
@@ -231,6 +195,9 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 
 	if (debug)
 		printf("r=%d, s=%d.\n", mpz_get_ui(r), mpz_get_ui(s));
+
+	mpz_clears(k, gcd, p_1, k_1, tmp, NULL);
+	gmp_randclear(gmpRandState);
 }
 
 int main2(int argc, char **argv)
@@ -326,6 +293,8 @@ int main(int argc, char **argv)
 	Generate_Sign(mdc, r, s, sk); // (12, 14), (29, 51)
 
 	Verify_Sign(mdc, r, s, pk);
+
+	mpz_clears(mdc, r, s, sk, pk, NULL);
 
 	return 0;
 }
