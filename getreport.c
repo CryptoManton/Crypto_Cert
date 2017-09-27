@@ -27,7 +27,7 @@ const char *factorlist_hex[] = {
 };
 
 int nfactors;
-int debug = 0;
+int debug = 1;
 mpz_t *factorlist;              /* Zugriff hierauf wie auf Array. Index 0<=i<nfactors */
 
 /*
@@ -64,6 +64,8 @@ static void Get_GCD(mpz_t gcd, mpz_t a, mpz_t b) {
 		if (mpz_get_ui(a)%i==0 && mpz_get_ui(b)%i==0)
 			mpz_set_ui(gcd, i);
 	}
+	if (debug) 
+		printf("gcd(%d, %d) = %d.\n", mpz_get_ui(a), mpz_get_ui(b), mpz_get_ui(gcd));
 }
 
 /*
@@ -204,25 +206,31 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 	if (debug)
 		printf("Found a k=%d\n", mpz_get_ui(k));
 
-	// mpz_set_ui(k, 137); // Für Beispiel: 13, 213, 137
+	//mpz_set_ui(k, 213); // Für Beispiel: 13, 213, 137
 
 	// und berechnet r := w^k mod p
 	mpz_powm(r, w, k, p);
 	if (debug)
 		printf("r = w^k mod p : r = %d ^ %d mod %d.\n", mpz_get_ui(w), mpz_get_ui(k), mpz_get_ui(p));
 
-	// und s := (m - r*x_A) * k^(-1) mod (p-1)
-	int i_s;
-	mpz_set_ui(k_1, Get_Inverse(mpz_get_ui(k), mpz_get_ui(p)-1));
+	// invert k mod (p-1) => k_1
+	mpz_invert(k_1, k, p_1);
 	if (debug)
-		printf("Inverse of %d is %d.\n", mpz_get_ui(k), mpz_get_ui(k_1));
-	i_s = ((mpz_get_ui(mdc) - (mpz_get_ui(r) * mpz_get_ui(x))) * mpz_get_ui(k_1)) % mpz_get_ui(p_1);
+		printf("k * k^(-1) = 1 mod (p-1) : %d * %d = 1 mod %d.\n", mpz_get_ui(k), mpz_get_ui(k_1), mpz_get_ui(p_1));
+
+	// und s := (m - r*x_A) * k^(-1) mod (p-1)
+	mpz_t tmp;
+	mpz_init(tmp);
+	mpz_mul(tmp, r, x);
+	mpz_sub(s, mdc, tmp);
+	mpz_mul(s, s, k_1);
+	mpz_mod(s, s, p_1);
+
 	if (debug)
 		printf("s = (m - r*sk) * k^(-1) mod (p-1) : r = (%d - %d*%d) * %d mod (%d).\n", mpz_get_ui(mdc), mpz_get_ui(r), mpz_get_ui(x), mpz_get_ui(k_1), mpz_get_ui(p_1));
 
 	if (debug)
-		printf("r=%d, s=%d.\n", mpz_get_ui(r), i_s);
-	mpz_set_ui(s, i_s);
+		printf("r=%d, s=%d.\n", mpz_get_ui(r), mpz_get_ui(s));
 }
 
 int main2(int argc, char **argv)
