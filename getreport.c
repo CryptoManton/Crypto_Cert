@@ -27,7 +27,7 @@ const char *factorlist_hex[] = {
 };
 
 int nfactors;
-int debug = 1;
+int debug = 0;
 mpz_t *factorlist;              /* Zugriff hierauf wie auf Array. Index 0<=i<nfactors */
 
 /*
@@ -94,44 +94,52 @@ static int Verify_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t y)
 	/*>>>>                                               <<<<*
 	 *>>>> AUFGABE: Verifizieren einer El-Gamal-Signatur <<<<*
 	 *>>>>                                               <<<<*/
-	mpz_t a, b, c, d;
+	if (debug)
+		gmp_printf("Verifying Signature for: \nm=%Zd, (r, s)=(%Zd, %Zd), pk=%Zd.\n", mdc, r, s, y);
+	
+	mpz_t a, b, c, d, e;
 
-	// y_A ^ r mod p
+	// a = y_A ^ r mod p
 	mpz_init(a);
 	mpz_powm(a, y, r, p);
 	if (debug)
-		printf("y_A^r : %d ^ %d = %d.\n", mpz_get_ui(y), mpz_get_ui(r), mpz_get_ui(a));
+		gmp_printf("y_A^r mod p : %Zd ^ %Zd mod %Zd = %Zd.\n", y, r, p, a);
 
-	// r ^ s mod p
+
+	// b = r ^ s mod p
 	mpz_init(b);
 	mpz_powm(b, r, s, p);
-	// printf("r^s : %d ^ %d = %d.\n", mpz_get_ui(r), mpz_get_ui(s), mpz_get_ui(b));
+	if (debug)
+		gmp_printf("r^s mod p : %Zd ^ %Zd mod %Zd = %Zd.\n", r, s, p, b);
 
-	// w ^ m mod p
+	// c = (y_A ^ r mod p) * (r ^ s mod p)
 	mpz_init(c);
-	mpz_powm(c, w, mdc, p);
-	if (debug)
-		printf("w^m : %d ^ %d = %d.\n", mpz_get_ui(w), mpz_get_ui(mdc), mpz_get_ui(c));
+	mpz_mul(c, a, b);
+	if (debug) 
+		gmp_printf("a * b = c : %Zd * %Zd = %Zd.\nc mod p : %Zd mod", a, b, c, c);
 
-	// (y_A ^ r mod p) * (r ^ s mod p)
+	// d = (y_A ^ r mod p) * (r ^ s mod p) mod p
 	mpz_init(d);
-	mpz_mul(d, a, b);
+	mpz_mod(d, c, p);
 	if (debug)
-		printf("a * b = d : %d * %d = %d.\n", mpz_get_ui(a), mpz_get_ui(b), mpz_get_ui(d));
+		gmp_printf(" %Zd = %Zd.\n", p, d);
 
-	// (y_A ^ r mod p) * (r ^ s mod p) mod p
-	mpz_mod(d, d, p);
+	// e = w ^ m mod p
+	mpz_init(e);
+	mpz_powm(e, w, mdc, p);
 	if (debug)
-		printf("d mod p = %d.\n", mpz_get_ui(d));
+		gmp_printf("w^m mod p : %Zd ^ %Zd mod %Zd = %Zd.\n", w, mdc, p, e);
 
-	if (mpz_get_ui(c) == mpz_get_ui(d)) {
+	if (mpz_get_ui(d) == mpz_get_ui(e)) {
 		if (debug)
-			printf("m=%d and sign(r,s)=(%d,%d) verified.\n", mpz_get_ui(mdc), mpz_get_ui(r), mpz_get_ui(s));
+			gmp_printf("m=%Zd and sign(r,s)=(%Zd,%Zd) verified.\n\n", mdc, r, s);
 		return 1;
 	}
 
 	if (debug)
-		printf("m=%d and sign(r,s)=(%d,%d) not verified.\n", mpz_get_ui(mdc), mpz_get_ui(r), mpz_get_ui(s));
+		gmp_printf("m=%Zd and sign(r,s)=(%Zd,%Zd) not verified.\n\n", mdc, r, s);
+
+	mpz_clears(a, b, c, d, e, NULL);
 		
 	return 0;
 }
@@ -147,13 +155,17 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 	 *>>>> AUFGABE: Erzeugen einer El-Gamal-Signatur <<<<*
 	 *>>>>                                           <<<<*/
 
+	if (debug) {
+		gmp_printf("Generating Signature for: \np=%Zd, g=%Zd, m=%Zd, sk=%Zd.\n", p, w, mdc, x);
+	}
+
 	mpz_t k, gcd, p_1, k_1;
 	gmp_randstate_t gmpRandState; 
 
 	mpz_init(gcd);
 	mpz_set_ui(gcd, 0);
 	mpz_init(p_1);
-	mpz_set_ui(p_1, mpz_get_ui(p)-1);
+	mpz_sub_ui(p_1, p, 1);
 	mpz_init(k);
 	mpz_init(k_1);
 
@@ -168,19 +180,19 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 		mpz_gcd(gcd, k, p_1);
 	}
 	if (debug)
-		printf("Found a k=%d\n", mpz_get_ui(k));
+		gmp_printf("Found a k=%Zd\n", k);
 
 	//mpz_set_ui(k, 213); // Für Beispiel: 13, 213, 137
 
 	// und berechnet r := w^k mod p
 	mpz_powm(r, w, k, p);
 	if (debug)
-		printf("r = w^k mod p : r = %d ^ %d mod %d.\n", mpz_get_ui(w), mpz_get_ui(k), mpz_get_ui(p));
+		gmp_printf("r = w^k mod p : r = %Zd ^ %Zd mod %Zd = %Zd.\n", w, k, p, r);
 
 	// invert k mod (p-1) => k_1
 	mpz_invert(k_1, k, p_1);
 	if (debug)
-		printf("k * k^(-1) = 1 mod (p-1) : %d * %d = 1 mod %d.\n", mpz_get_ui(k), mpz_get_ui(k_1), mpz_get_ui(p_1));
+		gmp_printf("k * k^(-1) = 1 mod (p-1) : %Zd * %Zd = 1 mod %Zd.\n", k, k_1, p_1);
 
 	// und s := (m - r*x_A) * k^(-1) mod (p-1)
 	mpz_t tmp;
@@ -191,16 +203,18 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 	mpz_mod(s, s, p_1);
 
 	if (debug)
-		printf("s = (m - r*sk) * k^(-1) mod (p-1) : r = (%d - %d*%d) * %d mod (%d).\n", mpz_get_ui(mdc), mpz_get_ui(r), mpz_get_ui(x), mpz_get_ui(k_1), mpz_get_ui(p_1));
+		gmp_printf("s = (m - r*sk) * k^(-1) mod (p-1) : s = (%Zd - %Zd*%Zd) * %Zd mod (%Zd) = %Zd.\n", mdc, r, x, k_1, p_1, s);
 
 	if (debug)
-		printf("r=%d, s=%d.\n", mpz_get_ui(r), mpz_get_ui(s));
+		gmp_printf("r=%Zd, s=%Zd.\n\n", r, s);
 
 	mpz_clears(k, gcd, p_1, k_1, tmp, NULL);
 	gmp_randclear(gmpRandState);
+
+
 }
 
-int main2(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	Connection con;
 	int cnt,ok;
@@ -222,7 +236,7 @@ int main2(int argc, char **argv)
 
 
 	/********************  Verbindung zum Dämon aufbauen  *********************/
-	OurName = MakeNetName(NULL); /* gibt in Wirklichkeit Unix-Gruppenname zurück! */
+	OurName = "manton";// MakeNetName(NULL); /* gibt in Wirklichkeit Unix-Gruppenname zurück! */
 	if (!(con=ConnectTo(OurName,DAEMON_NAME))) {
 		fprintf(stderr,"Kann keine Verbindung zum Daemon aufbauen: %s\n",NET_ErrorText());
 		exit(20);
@@ -267,10 +281,11 @@ int main2(int argc, char **argv)
 	 *>>>>                                      <<<<*/
 
 	mpz_clears(x, Daemon_y, Daemon_x, mdc, sign_s, sign_r, p, w, NULL);
+
 	return 0;
 }
 
-int main(int argc, char **argv) 
+int mainTest(int argc, char **argv) 
 {
 	mpz_t mdc, r, s, sk, pk;
 
