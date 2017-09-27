@@ -12,7 +12,6 @@
 #include "sign.h"
 #include <time.h>
 #include <gmp.h>
-#include <math.h>
 
 static mpz_t p;
 static mpz_t w;
@@ -28,6 +27,7 @@ const char *factorlist_hex[] = {
 };
 
 int nfactors;
+int debug = 0;
 mpz_t *factorlist;              /* Zugriff hierauf wie auf Array. Index 0<=i<nfactors */
 
 /*
@@ -58,7 +58,7 @@ static void init_factors(void)
 /*
 	Computes the greatest common devisor of a and b and saves it in gcd.
 */
-static void Get_GCD(mpz_t a, mpz_t b, mpz_t gcd) {
+static void Get_GCD(mpz_t gcd, mpz_t a, mpz_t b) {
 	int i;
 	for (i = 1; i <= mpz_get_ui(a) && mpz_get_ui(b); ++i) {
 		if (mpz_get_ui(a)%i==0 && mpz_get_ui(b)%i==0)
@@ -71,6 +71,7 @@ static void Get_GCD(mpz_t a, mpz_t b, mpz_t gcd) {
 	Prerequisite: gcd(a, c) = 1
 */
 static int Get_Inverse(int a, int b) {
+
 	int x[3], y[3];
 	int quotient = a / b;
 	int remain = a % b;
@@ -136,29 +137,39 @@ static int Verify_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t y)
 	// y_A ^ r mod p
 	mpz_init(a);
 	mpz_powm(a, y, r, p);
-	printf("y_A^r : %d ^ %d = %d.\n", mpz_get_ui(y), mpz_get_ui(r), mpz_get_ui(a));
+	if (debug)
+		printf("y_A^r : %d ^ %d = %d.\n", mpz_get_ui(y), mpz_get_ui(r), mpz_get_ui(a));
 
 	// r ^ s mod p
 	mpz_init(b);
 	mpz_powm(b, r, s, p);
-	printf("r^s : %d ^ %d = %d.\n", mpz_get_ui(r), mpz_get_ui(s), mpz_get_ui(b));
+	// printf("r^s : %d ^ %d = %d.\n", mpz_get_ui(r), mpz_get_ui(s), mpz_get_ui(b));
 
 	// w ^ m mod p
 	mpz_init(c);
 	mpz_powm(c, w, mdc, p);
-	printf("w^m : %d ^ %d = %d.\n", mpz_get_ui(w), mpz_get_ui(mdc), mpz_get_ui(c));
+	if (debug)
+		printf("w^m : %d ^ %d = %d.\n", mpz_get_ui(w), mpz_get_ui(mdc), mpz_get_ui(c));
 
 	// (y_A ^ r mod p) * (r ^ s mod p)
 	mpz_init(d);
 	mpz_mul(d, a, b);
-	printf("a * b = d : %d * %d = %d.\n", mpz_get_ui(a), mpz_get_ui(b), mpz_get_ui(d));
+	if (debug)
+		printf("a * b = d : %d * %d = %d.\n", mpz_get_ui(a), mpz_get_ui(b), mpz_get_ui(d));
 
 	// (y_A ^ r mod p) * (r ^ s mod p) mod p
 	mpz_mod(d, d, p);
-	printf("d mod p = %d.\n", mpz_get_ui(d));
+	if (debug)
+		printf("d mod p = %d.\n", mpz_get_ui(d));
 
-	if (mpz_get_ui(c) == mpz_get_ui(d))
+	if (mpz_get_ui(c) == mpz_get_ui(d)) {
+		if (debug)
+			printf("m=%d and sign(r,s)=(%d,%d) verified.\n", mpz_get_ui(mdc), mpz_get_ui(r), mpz_get_ui(s));
 		return 1;
+	}
+
+	if (debug)
+		printf("m=%d and sign(r,s)=(%d,%d) not verified.\n", mpz_get_ui(mdc), mpz_get_ui(r), mpz_get_ui(s));
 		
 	return 0;
 }
@@ -188,22 +199,29 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 	while(mpz_get_ui(gcd) != 1) {
 		mpz_set_ui(gcd, 0);
 		mpz_set_ui(k, rand() % mpz_get_ui(p_1));
-		Get_GCD(k, p_1, gcd);
+		Get_GCD(gcd, k, p_1);
 	}
-	printf("Found a k=%d\n", mpz_get_ui(k));
+	if (debug)
+		printf("Found a k=%d\n", mpz_get_ui(k));
+
+	// mpz_set_ui(k, 137); // Für Beispiel: 13, 213, 137
 
 	// und berechnet r := w^k mod p
 	mpz_powm(r, w, k, p);
-	//printf("r = w^k mod p : r = %d ^ %d mod %d.\n", mpz_get_ui(w), mpz_get_ui(k), mpz_get_ui(p));
+	if (debug)
+		printf("r = w^k mod p : r = %d ^ %d mod %d.\n", mpz_get_ui(w), mpz_get_ui(k), mpz_get_ui(p));
 
 	// und s := (m - r*x_A) * k^(-1) mod (p-1)
 	int i_s;
 	mpz_set_ui(k_1, Get_Inverse(mpz_get_ui(k), mpz_get_ui(p)-1));
-	//printf("Inverse of %d is %d.\n", mpz_get_ui(k), mpz_get_ui(k_1));
+	if (debug)
+		printf("Inverse of %d is %d.\n", mpz_get_ui(k), mpz_get_ui(k_1));
 	i_s = ((mpz_get_ui(mdc) - (mpz_get_ui(r) * mpz_get_ui(x))) * mpz_get_ui(k_1)) % mpz_get_ui(p_1);
-	//printf("s = (m - r*sk) * k^(-1) mod (p-1) : r = (%d - %d*%d) * %d mod (%d).\n", mpz_get_ui(mdc), mpz_get_ui(r), mpz_get_ui(x), mpz_get_ui(k_1), mpz_get_ui(p_1));
+	if (debug)
+		printf("s = (m - r*sk) * k^(-1) mod (p-1) : r = (%d - %d*%d) * %d mod (%d).\n", mpz_get_ui(mdc), mpz_get_ui(r), mpz_get_ui(x), mpz_get_ui(k_1), mpz_get_ui(p_1));
 
-	//printf("r=%d, s=%d.\n", mpz_get_ui(r), i_s);
+	if (debug)
+		printf("r=%d, s=%d.\n", mpz_get_ui(r), i_s);
 	mpz_set_ui(s, i_s);
 }
 
@@ -282,22 +300,22 @@ int main(int argc, char **argv)
 	mpz_t mdc, r, s, sk, pk;
 
 	mpz_init(mdc);
-	mpz_set_ui(mdc, 10);
+	mpz_set_ui(mdc, 168); // 10, 100, 168
 	mpz_init(r);
 	mpz_set_ui(r, 0);
 	mpz_init(s);
 	mpz_set_ui(s, 0);
 	mpz_init(sk);
-	mpz_set_ui(sk, 11);
+	mpz_set_ui(sk, 66); // 11, 127, 66
 	mpz_init(pk);
-	mpz_set_ui(pk, 7);
+	mpz_set_ui(pk, 1452); // 7, 132, 1452
 	
 	mpz_init(p);
-	mpz_set_ui(p, 17);
+	mpz_set_ui(p, 4679); // 17, 467, 4679
 	mpz_init(w);
-	mpz_set_ui(w, 3);
+	mpz_set_ui(w, 807); // 3, 2, 807
 
-	Generate_Sign(mdc, r, s, sk);
+	Generate_Sign(mdc, r, s, sk); // (12, 14), (29, 51)
 
 	Verify_Sign(mdc, r, s, pk);
 
