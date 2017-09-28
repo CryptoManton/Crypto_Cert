@@ -27,7 +27,7 @@ const char *factorlist_hex[] = {
 };
 
 int nfactors;
-int debug = 0;
+int debug = 1;
 mpz_t *factorlist;              /* Zugriff hierauf wie auf Array. Index 0<=i<nfactors */
 
 /*
@@ -65,6 +65,49 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 	/*>>>>                                                <<<<*
 	 *>>>> AUFGABE: Implementierung von BabyStepGiantStep <<<<*
 	 *>>>>                                                <<<<*/
+	mpz_t q_i, inv_w_q, tmp;
+	mpz_init(q_i);
+	mpz_sqrt(q_i, p_i);
+	mpz_add_ui(q_i, q_i, 1);  // lets go on number safer.
+
+	// this will be out list (w^i, i) for the baby steps
+	mpz_t* wi;
+	wi = malloc(mpz_get_ui(q_i) * sizeof(mpz_t));
+	unsigned long int* indices;
+	indices = malloc(mpz_get_ui(q_i) * sizeof(long int));
+	mpz_init_set_ui(wi[0], 1);
+
+	int i;
+	for (i = 0; i < mpz_get_ui(q_i); i++) {
+		indices[i] = i;
+		mpz_init(wi[i+1]);	
+		mpz_mul(wi[i+1], wi[i], w_i);	// fills list (w^i, i) with w^i = w^(i-1) * w_i mod p_i
+		mpz_mod(wi[i], wi[i], p_i);
+	}
+	qsort(wi, indices, mpz_get_ui(q_i), mpz_cmp);	// sort list for values, not indices
+
+	mpz_init_set(inv_w_q, w_i);
+	mpz_powm(inv_w_q, inv_w_q, q_i, p_i);	// compute (w_i ^ q_i mod p_i)^(-1)
+	mpz_invert(inv_w_q, p_i, inv_w_q);
+
+	mpz_init_set(tmp, a_i);
+
+	long int j = 0;
+	for (i = 0; i <= mpz_get_ui(q_i); i++) {
+		// search for tmp in our list
+		j = bsearch(wi, tmp, 0, mpz_get_ui(q_i), mpz_cmp);
+		if (j >= 0) {
+			mpz_mul_ui(q_i, q_i, i);
+			mpz_add_ui(q_i, q_i, indices[j]);
+			mpz_set(x_i, q_i);
+			gmp_printf("Found a x which satisfies y = w^x : %Zd = %Zd ^ %Zd.\n", a_i, w_i, x_i);
+			break;
+		}
+		// not found. update tmp
+		mpz_mul(tmp, tmp, inv_w_q);
+		mpz_mod(tmp, tmp, p_i);
+	}
+
 }
 
 /*
@@ -162,8 +205,7 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 	mpz_t k, gcd, p_1, k_1;
 	gmp_randstate_t gmpRandState; 
 
-	mpz_init(gcd);
-	mpz_set_ui(gcd, 0);
+	mpz_init_set_ui(gcd, 0);
 	mpz_init(p_1);
 	mpz_sub_ui(p_1, p, 1);
 	mpz_init(k);
@@ -214,7 +256,7 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 
 }
 
-int main(int argc, char **argv)
+int main2(int argc, char **argv)
 {
 	Connection con;
 	int cnt,ok;
@@ -285,29 +327,28 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-int mainTest(int argc, char **argv) 
+int main(int argc, char **argv) 
 {
-	mpz_t mdc, r, s, sk, pk;
+	mpz_t mdc, r, s, sk, pk, x, a;
 
-	mpz_init(mdc);
-	mpz_set_ui(mdc, 168); // 10, 100, 168
-	mpz_init(r);
-	mpz_set_ui(r, 0);
-	mpz_init(s);
-	mpz_set_ui(s, 0);
-	mpz_init(sk);
-	mpz_set_ui(sk, 66); // 11, 127, 66
-	mpz_init(pk);
-	mpz_set_ui(pk, 1452); // 7, 132, 1452
+	mpz_init_set_ui(mdc, 168); // 10, 100, 168
+	mpz_init_set_ui(r, 0);
+	mpz_init_set_ui(s, 0);
+	mpz_init_set_ui(sk, 66); // 11, 127, 66
+	mpz_init_set_ui(pk, 1452); // 7, 132, 1452
 	
-	mpz_init(p);
-	mpz_set_ui(p, 4679); // 17, 467, 4679
-	mpz_init(w);
-	mpz_set_ui(w, 807); // 3, 2, 807
+	mpz_init_set_ui(p, 4679); // 17, 467, 4679
+	mpz_init_set_ui(w, 807); // 3, 2, 807
+
+	mpz_init(x);
+	mpz_init(a);
+	mpz_powm(a, w, sk, p);
 
 	Generate_Sign(mdc, r, s, sk); // (12, 14), (29, 51)
 
 	Verify_Sign(mdc, r, s, pk);
+
+	babyStepGiantStep(x, a, w, p);
 
 	mpz_clears(mdc, r, s, sk, pk, NULL);
 
