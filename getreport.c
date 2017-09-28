@@ -27,7 +27,7 @@ const char *factorlist_hex[] = {
 };
 
 int nfactors;
-int debug = 1;
+int debug = 0;
 mpz_t *factorlist;              /* Zugriff hierauf wie auf Array. Index 0<=i<nfactors */
 
 /*
@@ -56,6 +56,18 @@ static void init_factors(void)
 }
 
 /*
+	Compare function for qsort BSGSElements
+*/
+int comparator(const void* a, const void* b) {
+	mpz_t g, h;
+	mpz_init_set(g, ((const BSGSElement*)a)->w_i);
+	mpz_init_set(h, ((const BSGSElement*)b)->w_i);
+	if (debug)
+		gmp_printf("a=%Zd, b=%Zd.\n", a, b);
+	return mpz_cmp(g, h);
+}
+
+/*
  * babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i):
  *
  * Berechnet x_i so dass a_i = w_i ^ x_i mod p.
@@ -69,38 +81,56 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 	mpz_init(q_i);
 	mpz_sqrt(q_i, p_i);
 	mpz_add_ui(q_i, q_i, 1);  // lets go on number safer.
+	gmp_printf("%Zd Elemente.\n", q_i);
 
 	// this will be out list (w^i, i) for the baby steps
-	mpz_t* wi;
-	wi = malloc(mpz_get_ui(q_i) * sizeof(mpz_t));
-	unsigned long int* indices;
-	indices = malloc(mpz_get_ui(q_i) * sizeof(long int));
-	mpz_init_set_ui(wi[0], 1);
+	BSGSElement* list;
+	list = malloc(mpz_get_ui(q_i) * sizeof(BSGSElement));
+	mpz_init_set_ui(list[0].w_i, 1);
+	list[0].index = 0;
 
 	int i;
-	for (i = 0; i < mpz_get_ui(q_i); i++) {
-		indices[i] = i;
-		mpz_init(wi[i+1]);	
-		mpz_mul(wi[i+1], wi[i], w_i);	// fills list (w^i, i) with w^i = w^(i-1) * w_i mod p_i
-		mpz_mod(wi[i], wi[i], p_i);
+	for (i = 0; i < mpz_get_ui(q_i)-1; i++) {
+		list[i+1].index = i+1;
+		mpz_init(list[i+1].w_i);
+		mpz_mul(list[i+1].w_i, list[i].w_i, w_i); gmp_printf("%Zd * %Zd = %Zd.\n", list[i].w_i, w_i, list[i+1].w_i);
+		mpz_mod(list[i+1].w_i, list[i+1].w_i, p_i);
+		gmp_printf("%d. Adding %Zd.\n", i, list[i].w_i);
 	}
-	qsort(wi, indices, mpz_get_ui(q_i), mpz_cmp);	// sort list for values, not indices
+	//mpz_set_ui(list[1].w_i, 11);
+	printf("\n");
 
+	for (int i = 0; i < mpz_get_ui(q_i); i++) {
+		gmp_printf("%d. %d\n", list[i].index, mpz_get_ui(list[i].w_i));
+	}
+	printf("\n");
+	qsort((void*)list, mpz_get_ui(q_i), sizeof(list[0]), comparator);	// sort list for values, not indices
+	for (int i = 0; i < mpz_get_ui(q_i); i++) {
+		gmp_printf("%d. %d\n", list[i].index, mpz_get_ui(list[i].w_i));
+	}
+	printf("\n");
 	mpz_init_set(inv_w_q, w_i);
 	mpz_powm(inv_w_q, inv_w_q, q_i, p_i);	// compute (w_i ^ q_i mod p_i)^(-1)
-	mpz_invert(inv_w_q, p_i, inv_w_q);
+	mpz_invert(inv_w_q, inv_w_q, p_i);
+	gmp_printf("Inverse of %Zd is %Zd.\n", p_i, inv_w_q);
 
 	mpz_init_set(tmp, a_i);
+	BSGSElement* bsgs_tmp = malloc(sizeof(BSGSElement));
+	mpz_init(bsgs_tmp->w_i);
 
-	long int j = 0;
+
+	BSGSElement* j;
 	for (i = 0; i <= mpz_get_ui(q_i); i++) {
 		// search for tmp in our list
-		j = bsearch(wi, tmp, 0, mpz_get_ui(q_i), mpz_cmp);
-		if (j >= 0) {
+		mpz_set(bsgs_tmp->w_i, tmp);
+		gmp_printf("%d. Searching for: %Zd.\n", i, tmp);
+		j = (BSGSElement*) bsearch(bsgs_tmp, list, mpz_get_ui(q_i), sizeof(BSGSElement), comparator);
+		if (j != NULL) {
+			gmp_printf("Found a y_i and a z_i which satisfies x_i [=] y_i + q_i * z_i : %d + %d * %Zd = ", j->index, i, q_i);
 			mpz_mul_ui(q_i, q_i, i);
-			mpz_add_ui(q_i, q_i, indices[j]);
+			mpz_add_ui(q_i, q_i, j->index);
 			mpz_set(x_i, q_i);
-			gmp_printf("Found a x which satisfies y = w^x : %Zd = %Zd ^ %Zd.\n", a_i, w_i, x_i);
+			gmp_printf("%Zd.\n", x_i);
 			break;
 		}
 		// not found. update tmp
@@ -262,7 +292,7 @@ int main2(int argc, char **argv)
 	int cnt,ok;
 	Message msg;
 	mpz_t x, Daemon_y, Daemon_x, mdc, sign_s, sign_r;
-	char *OurName;
+	char *OurName = "manton";
 
 	mpz_init(x);
 	mpz_init(Daemon_y);
@@ -278,7 +308,7 @@ int main2(int argc, char **argv)
 
 
 	/********************  Verbindung zum Dämon aufbauen  *********************/
-	OurName = "manton";// MakeNetName(NULL); /* gibt in Wirklichkeit Unix-Gruppenname zurück! */
+	//OurName = "manton";// MakeNetName(NULL); /* gibt in Wirklichkeit Unix-Gruppenname zurück! */
 	if (!(con=ConnectTo(OurName,DAEMON_NAME))) {
 		fprintf(stderr,"Kann keine Verbindung zum Daemon aufbauen: %s\n",NET_ErrorText());
 		exit(20);
@@ -329,26 +359,70 @@ int main2(int argc, char **argv)
 
 int main(int argc, char **argv) 
 {
-	mpz_t mdc, r, s, sk, pk, x, a;
+	mpz_t mdc, r, s, sk, pk, x, a, t, u, v;
 
 	mpz_init_set_ui(mdc, 168); // 10, 100, 168
-	mpz_init_set_ui(r, 0);
-	mpz_init_set_ui(s, 0);
+	mpz_init_set_ui(r, 975);
+	mpz_init_set_ui(s, 4);
 	mpz_init_set_ui(sk, 66); // 11, 127, 66
 	mpz_init_set_ui(pk, 1452); // 7, 132, 1452
 	
 	mpz_init_set_ui(p, 4679); // 17, 467, 4679
 	mpz_init_set_ui(w, 807); // 3, 2, 807
 
+	mpz_init_set_ui(t, 350);
+	mpz_init_set_ui(u, 100);
+	mpz_init_set_ui(v, 350);
+	mpz_init_set_ui(a, 1020);
+	mpz_init_set_ui(x, 999);
+
+	BSGSElement* t_b = malloc(9 * (sizeof(BSGSElement)));
+	BSGSElement* hu1 = malloc(sizeof(BSGSElement));
+	BSGSElement* hu2 = malloc(sizeof(BSGSElement));
+	mpz_init_set(hu1->w_i, x); hu1->index = 1;
+	mpz_init_set(hu2->w_i, a); hu2->index = 2;
+	mpz_init_set(t_b[0].w_i, mdc);   t_b[0].index = 0;
+	mpz_init_set(t_b[1].w_i, r);    t_b[1].index = 1;
+	mpz_init_set(t_b[2].w_i, s);    t_b[2].index = 2;
+	mpz_init_set(t_b[3].w_i, sk);   t_b[3].index = 3;
+	mpz_init_set(t_b[4].w_i, pk);   t_b[4].index = 4;
+	mpz_init_set(t_b[5].w_i, a);    t_b[5].index = 5;
+	mpz_init_set(t_b[6].w_i, t);   t_b[6].index = 6;
+	mpz_init_set(t_b[7].w_i, u);   t_b[7].index = 7;
+	mpz_init_set(t_b[8].w_i, v);   t_b[8].index = 8;
+
+	int size = 9;
+
+	/*for (int i = 0; i < size; i++) {
+		gmp_printf("%d. %d\n", t_b[i].index, mpz_get_ui(t_b[i].w_i));
+	}
+	printf("\n");
+	qsort((void*)t_b, size, sizeof(t_b[0]), comparator);
+
+	for (int i = 0; i < size; i++) {
+		gmp_printf("%d. %d\n", t_b[i].index, mpz_get_ui(t_b[i].w_i));
+	}
+
+	BSGSElement* hugo;
+	hugo = (BSGSElement*)bsearch(hu2, t_b, size, sizeof(t_b[0]), comparator);
+	if (hugo != NULL) {printf("First found. hugo = %d.\n", hugo->index);} else {printf("First not found. hugo = %d.\n", 3);}
+	hugo = (int*)bsearch(hu1, t_b, size, sizeof(t_b[0]), comparator);
+	if (hugo != NULL) {printf("Second found. hugo = %d.\n", hugo->index);} else {printf("Second not found hugo = %d.\n", 33);}
+*/
 	mpz_init(x);
 	mpz_init(a);
 	mpz_powm(a, w, sk, p);
 
 	Generate_Sign(mdc, r, s, sk); // (12, 14), (29, 51)
-
 	Verify_Sign(mdc, r, s, pk);
 
-	babyStepGiantStep(x, a, w, p);
+
+	mpz_t b_x, b_a, b_w, b_p;
+	mpz_init_set_ui(b_x, 0);
+	mpz_init_set_ui(b_a, 3);
+	mpz_init_set_ui(b_w, 11);
+	mpz_init_set_ui(b_p, 29);
+	babyStepGiantStep(b_x, b_a, b_w, b_p);
 
 	mpz_clears(mdc, r, s, sk, pk, NULL);
 
