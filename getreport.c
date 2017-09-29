@@ -16,7 +16,9 @@
 static mpz_t p;
 static mpz_t w;
 
-const char *factorlist_hex[] = {
+const char *factorlist_hex[] = {"3", "4", "349"}; // {"3", "4", "7", "5", "B"};
+
+/*{
 	"5", "7", "9", "B", "D", "11","13","17","1D","1F","25","29",
 	"2B","2F","35","3B","3D","40","43","47","49","4F","53","59",
 	"61","65","67","6B","6D","71","7F","83","89","8B","95","97",
@@ -24,7 +26,7 @@ const char *factorlist_hex[] = {
 	"E3","E5","E9","EF","F1","FB","101","107","10D","10F","115",
 	"119","11B","125","133","137","139","13D","14B",
 	"10000000F", "12000050F", 0
-};
+};*/
 
 int nfactors;
 int debug = 0;
@@ -46,6 +48,8 @@ static void init_factors(void)
 		mpz_init(factorlist[i]);
 		mpz_set_str(factorlist[i], factorlist_hex[i], 16);
 		mpz_mul(tmp, tmp, factorlist[i]);
+		if (1)
+			gmp_printf("i=%d, factor=%Zd, tmp=%Zd\n", i, factorlist[i], tmp);
 	}
 	mpz_add_ui(tmp, tmp, 1);
 	if (mpz_cmp(tmp, p)) {
@@ -77,6 +81,7 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 	/*>>>>                                                <<<<*
 	 *>>>> AUFGABE: Implementierung von BabyStepGiantStep <<<<*
 	 *>>>>                                                <<<<*/
+	printf("\n");
 	mpz_t q_i, inv_w_q, tmp;
 	mpz_init(q_i);
 	mpz_sqrt(q_i, p_i);
@@ -88,31 +93,32 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 	list = malloc(mpz_get_ui(q_i) * sizeof(BSGSElement));
 	mpz_init_set_ui(list[0].w_i, 1);
 	list[0].index = 0;
+	gmp_printf("%d. Adding %Zd.\n", 0, list[0].w_i);
 
 	int i;
-	for (i = 0; i < mpz_get_ui(q_i)-1; i++) {
-		list[i+1].index = i+1;
-		mpz_init(list[i+1].w_i);
-		mpz_mul(list[i+1].w_i, list[i].w_i, w_i); gmp_printf("%Zd * %Zd = %Zd.\n", list[i].w_i, w_i, list[i+1].w_i);
-		mpz_mod(list[i+1].w_i, list[i+1].w_i, p_i);
+	for (i = 1; i < mpz_get_ui(q_i); i++) {
+		list[i].index = i;
+		mpz_init(list[i].w_i);
+		mpz_mul(list[i].w_i, list[i-1].w_i, w_i); //gmp_printf("%Zd * %Zd = %Zd.\n%Zd mod %Zd", list[i].w_i, w_i, list[i+1].w_i, list[i+1].w_i, p);
+		mpz_mod(list[i].w_i, list[i].w_i, p); //gmp_printf(" = %Zd.\n", list[i+1].w_i);
 		gmp_printf("%d. Adding %Zd.\n", i, list[i].w_i);
 	}
-	//mpz_set_ui(list[1].w_i, 11);
 	printf("\n");
 
 	for (int i = 0; i < mpz_get_ui(q_i); i++) {
-		gmp_printf("%d. %d\n", list[i].index, mpz_get_ui(list[i].w_i));
+		gmp_printf("%d. %Zd\n", list[i].index, list[i].w_i);
 	}
 	printf("\n");
 	qsort((void*)list, mpz_get_ui(q_i), sizeof(list[0]), comparator);	// sort list for values, not indices
 	for (int i = 0; i < mpz_get_ui(q_i); i++) {
-		gmp_printf("%d. %d\n", list[i].index, mpz_get_ui(list[i].w_i));
+		gmp_printf("%d. %Zd\n", list[i].index, list[i].w_i);
 	}
 	printf("\n");
 	mpz_init_set(inv_w_q, w_i);
-	mpz_powm(inv_w_q, inv_w_q, q_i, p_i);	// compute (w_i ^ q_i mod p_i)^(-1)
-	mpz_invert(inv_w_q, inv_w_q, p_i);
-	gmp_printf("Inverse of %Zd is %Zd.\n", p_i, inv_w_q);
+	mpz_powm(inv_w_q, inv_w_q, q_i, p);	// compute (w_i ^ q_i mod p)^(-1)
+	gmp_printf("Inverse of %Zd is ", inv_w_q);
+	mpz_invert(inv_w_q, inv_w_q, p);
+	gmp_printf("%Zd.\n", inv_w_q);
 
 	mpz_init_set(tmp, a_i);
 	BSGSElement* bsgs_tmp = malloc(sizeof(BSGSElement));
@@ -120,7 +126,7 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 
 
 	BSGSElement* j;
-	for (i = 0; i <= mpz_get_ui(q_i); i++) {
+	for (i = 0; i < mpz_get_ui(q_i); i++) {											// <= ???
 		// search for tmp in our list
 		mpz_set(bsgs_tmp->w_i, tmp);
 		gmp_printf("%d. Searching for: %Zd.\n", i, tmp);
@@ -135,9 +141,9 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 		}
 		// not found. update tmp
 		mpz_mul(tmp, tmp, inv_w_q);
-		mpz_mod(tmp, tmp, p_i);
+		mpz_mod(tmp, tmp, p);
 	}
-
+	mpz_clears(q_i, inv_w_q, tmp, NULL);
 }
 
 /*
@@ -151,6 +157,25 @@ static void dlogP(mpz_t x, mpz_t y)
 	/*>>>>                                            <<<<*
 	 *>>>> AUFGABE: Berechnen des geheimen Schlüssels <<<<*
 	 *>>>>                                            <<<<*/
+	mpz_t p_1, tmp, a_i, w_i, p_i;
+	mpz_t* x_is = malloc(nfactors * sizeof(mpz_t));
+	mpz_init(p_1);
+	mpz_init(a_i);
+	mpz_init(w_i);
+	mpz_init(p_i);
+	mpz_init_set_ui(tmp, 0);
+	mpz_sub_ui(p_1, p, 1);
+
+	for (int i = 0; i < nfactors; i++) {
+		mpz_set(p_i, factorlist[i]);
+		mpz_div(tmp, p_1, p_i);      // tmp = p-1 / p_i
+		mpz_powm(w_i, w, tmp, p);	 // w_i = w ^ (p-1 / p_i) mod p
+		mpz_mul(tmp, tmp, tmp);      // tmp = (p-1 / p_i)²
+		mpz_powm(a_i, y, tmp, p);	 // a_i = a ^ (p-1 / p_i)² mod p
+		gmp_printf("%d. BSGS for a_i=%Zd, w_i=%Zd, p_i=%Zd.\n With p=%Zd\n", i, a_i, w_i, p_i, p);
+		mpz_init(x_is[i]);
+		babyStepGiantStep(x_is[i], a_i, w_i, p_i);
+	}
 }
 
 
@@ -351,6 +376,8 @@ int main2(int argc, char **argv)
 	/*>>>>                                      <<<<*
 	 *>>>> AUFGABE: Fälschen der Dämon-Signatur <<<<*
 	 *>>>>                                      <<<<*/
+	dlogP(x, sign_r);
+
 
 	mpz_clears(x, Daemon_y, Daemon_x, mdc, sign_s, sign_r, p, w, NULL);
 
@@ -364,11 +391,11 @@ int main(int argc, char **argv)
 	mpz_init_set_ui(mdc, 168); // 10, 100, 168
 	mpz_init_set_ui(r, 975);
 	mpz_init_set_ui(s, 4);
-	mpz_init_set_ui(sk, 66); // 11, 127, 66
-	mpz_init_set_ui(pk, 1452); // 7, 132, 1452
+	mpz_init_set_ui(sk, 127); // 11, 127, 66
+	mpz_init_set_ui(pk, 132); // 7, 132, 1452
 	
-	mpz_init_set_ui(p, 4679); // 17, 467, 4679
-	mpz_init_set_ui(w, 807); // 3, 2, 807
+	mpz_init_set_ui(p, 673); // 17, 467, 4679
+	mpz_init_set_ui(w, 2); // 3, 2, 807
 
 	mpz_init_set_ui(t, 350);
 	mpz_init_set_ui(u, 100);
@@ -390,10 +417,10 @@ int main(int argc, char **argv)
 	mpz_init_set(t_b[6].w_i, t);   t_b[6].index = 6;
 	mpz_init_set(t_b[7].w_i, u);   t_b[7].index = 7;
 	mpz_init_set(t_b[8].w_i, v);   t_b[8].index = 8;
-
+/*
 	int size = 9;
 
-	/*for (int i = 0; i < size; i++) {
+	for (int i = 0; i < size; i++) {
 		gmp_printf("%d. %d\n", t_b[i].index, mpz_get_ui(t_b[i].w_i));
 	}
 	printf("\n");
@@ -422,7 +449,12 @@ int main(int argc, char **argv)
 	mpz_init_set_ui(b_a, 3);
 	mpz_init_set_ui(b_w, 11);
 	mpz_init_set_ui(b_p, 29);
-	babyStepGiantStep(b_x, b_a, b_w, b_p);
+	//babyStepGiantStep(b_x, b_a, b_w, b_p);
+
+	nfactors = 3;
+	mpz_set_ui(p, 10093);
+	mpz_powm(b_w, w, sk, p);
+	dlogP(b_x, b_w);
 
 	mpz_clears(mdc, r, s, sk, pk, NULL);
 
