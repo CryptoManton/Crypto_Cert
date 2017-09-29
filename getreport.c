@@ -16,9 +16,7 @@
 static mpz_t p;
 static mpz_t w;
 
-const char *factorlist_hex[] = {"3", "4", "349"}; // {"3", "4", "7", "5", "B"};
-
-/*{
+const char *factorlist_hex[] = {
 	"5", "7", "9", "B", "D", "11","13","17","1D","1F","25","29",
 	"2B","2F","35","3B","3D","40","43","47","49","4F","53","59",
 	"61","65","67","6B","6D","71","7F","83","89","8B","95","97",
@@ -26,7 +24,7 @@ const char *factorlist_hex[] = {"3", "4", "349"}; // {"3", "4", "7", "5", "B"};
 	"E3","E5","E9","EF","F1","FB","101","107","10D","10F","115",
 	"119","11B","125","133","137","139","13D","14B",
 	"10000000F", "12000050F", 0
-};*/
+};
 
 int nfactors;
 int debug = 0;
@@ -101,24 +99,30 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 		mpz_init(list[i].w_i);
 		mpz_mul(list[i].w_i, list[i-1].w_i, w_i); //gmp_printf("%Zd * %Zd = %Zd.\n%Zd mod %Zd", list[i].w_i, w_i, list[i+1].w_i, list[i+1].w_i, p);
 		mpz_mod(list[i].w_i, list[i].w_i, p); //gmp_printf(" = %Zd.\n", list[i+1].w_i);
-		gmp_printf("%d. Adding %Zd.\n", i, list[i].w_i);
+		if (debug)
+			gmp_printf("%d. Adding %Zd.\n", i, list[i].w_i);
 	}
-	printf("\n");
-
-	for (int i = 0; i < mpz_get_ui(q_i); i++) {
-		gmp_printf("%d. %Zd\n", list[i].index, list[i].w_i);
+	//printf("\n");
+	if (debug) {
+		for (int i = 0; i < mpz_get_ui(q_i); i++) {
+			gmp_printf("%d. %Zd\n", list[i].index, list[i].w_i);
+		}
 	}
-	printf("\n");
+	//printf("\n");
 	qsort((void*)list, mpz_get_ui(q_i), sizeof(list[0]), comparator);	// sort list for values, not indices
-	for (int i = 0; i < mpz_get_ui(q_i); i++) {
-		gmp_printf("%d. %Zd\n", list[i].index, list[i].w_i);
+	if (debug) {
+		for (int i = 0; i < mpz_get_ui(q_i); i++) {
+			gmp_printf("%d. %Zd\n", list[i].index, list[i].w_i);
+		}
 	}
 	printf("\n");
 	mpz_init_set(inv_w_q, w_i);
 	mpz_powm(inv_w_q, inv_w_q, q_i, p);	// compute (w_i ^ q_i mod p)^(-1)
-	gmp_printf("Inverse of %Zd is ", inv_w_q);
+	if (debug)
+		gmp_printf("Inverse of %Zd is ", inv_w_q);
 	mpz_invert(inv_w_q, inv_w_q, p);
-	gmp_printf("%Zd.\n", inv_w_q);
+	if (debug)
+		gmp_printf("%Zd.\n", inv_w_q);
 
 	mpz_init_set(tmp, a_i);
 	BSGSElement* bsgs_tmp = malloc(sizeof(BSGSElement));
@@ -129,7 +133,8 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 	for (i = 0; i < mpz_get_ui(q_i); i++) {											// <= ???
 		// search for tmp in our list
 		mpz_set(bsgs_tmp->w_i, tmp);
-		gmp_printf("%d. Searching for: %Zd.\n", i, tmp);
+		if (debug)
+			gmp_printf("%d. Searching for: %Zd.\n", i, tmp);
 		j = (BSGSElement*) bsearch(bsgs_tmp, list, mpz_get_ui(q_i), sizeof(BSGSElement), comparator);
 		if (j != NULL) {
 			gmp_printf("Found a y_i and a z_i which satisfies x_i [=] y_i + q_i * z_i : %d + %d * %Zd = ", j->index, i, q_i);
@@ -157,25 +162,69 @@ static void dlogP(mpz_t x, mpz_t y)
 	/*>>>>                                            <<<<*
 	 *>>>> AUFGABE: Berechnen des geheimen Schlüssels <<<<*
 	 *>>>>                                            <<<<*/
-	mpz_t p_1, tmp, a_i, w_i, p_i;
+	int i;
+	mpz_t p_1, tmp, a_i, w_i, p_i, inv;
 	mpz_t* x_is = malloc(nfactors * sizeof(mpz_t));
+	mpz_t* crt_x_is = malloc(nfactors * sizeof(mpz_t));
 	mpz_init(p_1);
 	mpz_init(a_i);
 	mpz_init(w_i);
 	mpz_init(p_i);
+	mpz_init(inv);
 	mpz_init_set_ui(tmp, 0);
 	mpz_sub_ui(p_1, p, 1);
 
-	for (int i = 0; i < nfactors; i++) {
+	for (i = 0; i < nfactors; i++) {
 		mpz_set(p_i, factorlist[i]);
 		mpz_div(tmp, p_1, p_i);      // tmp = p-1 / p_i
 		mpz_powm(w_i, w, tmp, p);	 // w_i = w ^ (p-1 / p_i) mod p
 		mpz_mul(tmp, tmp, tmp);      // tmp = (p-1 / p_i)²
 		mpz_powm(a_i, y, tmp, p);	 // a_i = a ^ (p-1 / p_i)² mod p
-		gmp_printf("%d. BSGS for a_i=%Zd, w_i=%Zd, p_i=%Zd.\n With p=%Zd\n", i, a_i, w_i, p_i, p);
+		if (debug)
+			gmp_printf("%d. BSGS for a_i=%Zd, w_i=%Zd, p_i=%Zd.\n With p=%Zd\n", i, a_i, w_i, p_i, p);
 		mpz_init(x_is[i]);
 		babyStepGiantStep(x_is[i], a_i, w_i, p_i);
 	}
+	if (debug) {
+		for (i = 0; i < nfactors; i++) {
+			gmp_printf("prime[%d] = %Zd. x[%d] = %Zd.\n", i, factorlist[i], i, x_is[i]);
+		}
+	}
+	// now we got our crt-values, time to do some math
+	for (i = 0; i < nfactors; i++) {
+		mpz_init(crt_x_is[i]);
+		mpz_div(tmp, p_1, factorlist[i]);						// compute tmp = (p-1) / p_i
+		//gmp_printf("x = %Zd / %Zd <=> ", x_is[i], tmp);
+		mpz_invert(tmp, tmp, factorlist[i]);					// tmp^(-1)
+		//gmp_printf("x = %Zd * %Zd mod %Zd ", x_is[i], tmp, factorlist[i]);
+		mpz_mul(crt_x_is[i], x_is[i], tmp);						// x_i * tmp^(-1)
+		mpz_mod(crt_x_is[i], crt_x_is[i], factorlist[i]);		// x_i * tmp^(-1) mod p_i
+		if (debug)
+			gmp_printf("%d. x = %Zd mod %Zd.\n", i, crt_x_is[i], factorlist[i]);
+	}
+	//printf("\n");
+	mpz_t x_p, x_q, p_inv, z, p_q;
+	mpz_init(x_p); mpz_init(x_q); mpz_init(p_inv); mpz_init(z); mpz_init(p_q);
+	
+	mpz_mod(z, x_is[0], factorlist[0]);
+	mpz_set(p_q, factorlist[0]);
+
+	mpz_t p, prod, sum;
+	mpz_init(p); mpz_init_set_ui(prod, 1); mpz_init_set_ui(sum, 0);
+
+	for (i = 0; i < nfactors; i++)
+		mpz_mul(prod, prod, factorlist[i]);
+
+	for (i = 0; i < nfactors; i++) {
+		mpz_div(p, prod, factorlist[i]);
+		mpz_invert(p_inv, p, factorlist[i]);
+		mpz_mul(tmp, p_inv, p);
+		mpz_mul(tmp, crt_x_is[i], tmp);
+		mpz_add(sum, sum, tmp);
+	}
+	mpz_mod(tmp, sum, prod);
+	mpz_set(x, tmp);
+	gmp_printf("sum=%Zd, prod=%Zd, x=%Zd.\n", sum, prod, tmp);
 }
 
 
@@ -311,7 +360,7 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 
 }
 
-int main2(int argc, char **argv)
+int main(int argc, char **argv)
 {
 	Connection con;
 	int cnt,ok;
@@ -376,7 +425,10 @@ int main2(int argc, char **argv)
 	/*>>>>                                      <<<<*
 	 *>>>> AUFGABE: Fälschen der Dämon-Signatur <<<<*
 	 *>>>>                                      <<<<*/
-	dlogP(x, sign_r);
+	dlogP(x, mdc);
+	Generate_Sign(mdc, sign_r, sign_s, x);
+	int ko = Verify_Sign(mdc, sign_r, sign_s, Daemon_y);
+	if (ko) printf("Zertifikat gefälscht!");
 
 
 	mpz_clears(x, Daemon_y, Daemon_x, mdc, sign_s, sign_r, p, w, NULL);
@@ -384,7 +436,7 @@ int main2(int argc, char **argv)
 	return 0;
 }
 
-int main(int argc, char **argv) 
+int mainTest(int argc, char **argv) 
 {
 	mpz_t mdc, r, s, sk, pk, x, a, t, u, v;
 
@@ -451,8 +503,9 @@ int main(int argc, char **argv)
 	mpz_init_set_ui(b_p, 29);
 	//babyStepGiantStep(b_x, b_a, b_w, b_p);
 
-	nfactors = 3;
-	mpz_set_ui(p, 10093);
+	nfactors = 4;
+	mpz_set_ui(p, 571);
+	mpz_set_ui(sk, 199);
 	mpz_powm(b_w, w, sk, p);
 	dlogP(b_x, b_w);
 

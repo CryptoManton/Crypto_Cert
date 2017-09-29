@@ -31,6 +31,11 @@ typedef struct {      /* personenbezogene Daten, eigentlich ist nur 'x' geheim! 
 	mpz_t x;
 } SecretData;
 
+typedef struct {      /* Element for the Baby-Step Giant-Step algorithm */
+mpz_t w_i;
+unsigned long int index;
+} BSGSElement;
+
 typedef struct {      /* Öffentliche Daten einer Person */
 	String name;  /* Name des Inhabers */
 	mpz_t y;      /* öffentliches Y */
