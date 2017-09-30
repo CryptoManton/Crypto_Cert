@@ -46,7 +46,7 @@ static void init_factors(void)
 		mpz_init(factorlist[i]);
 		mpz_set_str(factorlist[i], factorlist_hex[i], 16);
 		mpz_mul(tmp, tmp, factorlist[i]);
-		if (1)
+		if (debug)
 			gmp_printf("i=%d, factor=%Zd, tmp=%Zd\n", i, factorlist[i], tmp);
 	}
 	mpz_add_ui(tmp, tmp, 1);
@@ -79,19 +79,20 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 	/*>>>>                                                <<<<*
 	 *>>>> AUFGABE: Implementierung von BabyStepGiantStep <<<<*
 	 *>>>>                                                <<<<*/
-	printf("\n");
 	mpz_t q_i, inv_w_q, tmp;
 	mpz_init(q_i);
 	mpz_sqrt(q_i, p_i);
 	mpz_add_ui(q_i, q_i, 1);  // lets go on number safer.
-	gmp_printf("%Zd Elemente.\n", q_i);
+	if (debug)
+		gmp_printf("%Zd Elemente.\n", q_i);
 
 	// this will be out list (w^i, i) for the baby steps
 	BSGSElement* list;
 	list = malloc(mpz_get_ui(q_i) * sizeof(BSGSElement));
 	mpz_init_set_ui(list[0].w_i, 1);
 	list[0].index = 0;
-	gmp_printf("%d. Adding %Zd.\n", 0, list[0].w_i);
+	if (debug)
+		gmp_printf("%d. Adding %Zd.\n", 0, list[0].w_i);
 
 	int i;
 	for (i = 1; i < mpz_get_ui(q_i); i++) {
@@ -102,20 +103,17 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 		if (debug)
 			gmp_printf("%d. Adding %Zd.\n", i, list[i].w_i);
 	}
-	//printf("\n");
 	if (debug) {
 		for (int i = 0; i < mpz_get_ui(q_i); i++) {
 			gmp_printf("%d. %Zd\n", list[i].index, list[i].w_i);
 		}
 	}
-	//printf("\n");
 	qsort((void*)list, mpz_get_ui(q_i), sizeof(list[0]), comparator);	// sort list for values, not indices
 	if (debug) {
 		for (int i = 0; i < mpz_get_ui(q_i); i++) {
 			gmp_printf("%d. %Zd\n", list[i].index, list[i].w_i);
 		}
 	}
-	printf("\n");
 	mpz_init_set(inv_w_q, w_i);
 	mpz_powm(inv_w_q, inv_w_q, q_i, p);	// compute (w_i ^ q_i mod p)^(-1)
 	if (debug)
@@ -130,18 +128,20 @@ static void babyStepGiantStep(mpz_t x_i, mpz_t a_i, mpz_t w_i, mpz_t p_i)
 
 
 	BSGSElement* j;
-	for (i = 0; i < mpz_get_ui(q_i); i++) {											// <= ???
+	for (i = 0; i < mpz_get_ui(q_i); i++) {
 		// search for tmp in our list
 		mpz_set(bsgs_tmp->w_i, tmp);
 		if (debug)
 			gmp_printf("%d. Searching for: %Zd.\n", i, tmp);
 		j = (BSGSElement*) bsearch(bsgs_tmp, list, mpz_get_ui(q_i), sizeof(BSGSElement), comparator);
 		if (j != NULL) {
-			gmp_printf("Found a y_i and a z_i which satisfies x_i [=] y_i + q_i * z_i : %d + %d * %Zd = ", j->index, i, q_i);
+			if (debug)
+				gmp_printf("Found a y_i and a z_i which satisfies x_i [=] y_i + q_i * z_i : %d + %d * %Zd = ", j->index, i, q_i);
 			mpz_mul_ui(q_i, q_i, i);
 			mpz_add_ui(q_i, q_i, j->index);
 			mpz_set(x_i, q_i);
-			gmp_printf("%Zd.\n", x_i);
+			if (debug)
+				gmp_printf("%Zd.\n", x_i);
 			break;
 		}
 		// not found. update tmp
@@ -194,15 +194,12 @@ static void dlogP(mpz_t x, mpz_t y)
 	for (i = 0; i < nfactors; i++) {
 		mpz_init(crt_x_is[i]);
 		mpz_div(tmp, p_1, factorlist[i]);						// compute tmp = (p-1) / p_i
-		//gmp_printf("x = %Zd / %Zd <=> ", x_is[i], tmp);
 		mpz_invert(tmp, tmp, factorlist[i]);					// tmp^(-1)
-		//gmp_printf("x = %Zd * %Zd mod %Zd ", x_is[i], tmp, factorlist[i]);
 		mpz_mul(crt_x_is[i], x_is[i], tmp);						// x_i * tmp^(-1)
 		mpz_mod(crt_x_is[i], crt_x_is[i], factorlist[i]);		// x_i * tmp^(-1) mod p_i
 		if (debug)
 			gmp_printf("%d. x = %Zd mod %Zd.\n", i, crt_x_is[i], factorlist[i]);
 	}
-	//printf("\n");
 	mpz_t x_p, x_q, p_inv, z, p_q;
 	mpz_init(x_p); mpz_init(x_q); mpz_init(p_inv); mpz_init(z); mpz_init(p_q);
 	
@@ -224,7 +221,8 @@ static void dlogP(mpz_t x, mpz_t y)
 	}
 	mpz_mod(tmp, sum, prod);
 	mpz_set(x, tmp);
-	gmp_printf("sum=%Zd, prod=%Zd, x=%Zd.\n", sum, prod, tmp);
+	if (debug)
+		gmp_printf("sum=%Zd, prod=%Zd, x=%Zd.\n", sum, prod, tmp);
 }
 
 
@@ -328,8 +326,6 @@ static void Generate_Sign(mpz_t mdc, mpz_t r, mpz_t s, mpz_t x)
 	if (debug)
 		gmp_printf("Found a k=%Zd\n", k);
 
-	//mpz_set_ui(k, 213); // Für Beispiel: 13, 213, 137
-
 	// und berechnet r := w^k mod p
 	mpz_powm(r, w, k, p);
 	if (debug)
@@ -365,8 +361,9 @@ int main(int argc, char **argv)
 	Connection con;
 	int cnt,ok;
 	Message msg;
-	mpz_t x, Daemon_y, Daemon_x, mdc, sign_s, sign_r;
+	mpz_t x, Daemon_y, Daemon_x, mdc, sign_s, sign_r, fake_x;
 	char *OurName = "manton";
+	char* fake_report[10];
 
 	mpz_init(x);
 	mpz_init(Daemon_y);
@@ -376,6 +373,7 @@ int main(int argc, char **argv)
 	mpz_init(sign_r);
 	mpz_init(p);
 	mpz_init(w);
+	mpz_init(fake_x);
 
 	/**************  Laden der öffentlichen und privaten Daten  ***************/
 	if (!Get_Private_Key(NULL, p, w, x) || !Get_Public_Key(DAEMON_NAME, Daemon_y)) exit(0);
@@ -387,7 +385,6 @@ int main(int argc, char **argv)
 		fprintf(stderr,"Kann keine Verbindung zum Daemon aufbauen: %s\n",NET_ErrorText());
 		exit(20);
 	}
-
 
 	/***********  Message vom Typ ReportRequest initialisieren  ***************/
 	msg.typ  = ReportRequest;                       /* Typ setzten */
@@ -425,18 +422,58 @@ int main(int argc, char **argv)
 	/*>>>>                                      <<<<*
 	 *>>>> AUFGABE: Fälschen der Dämon-Signatur <<<<*
 	 *>>>>                                      <<<<*/
-	dlogP(x, mdc);
-	Generate_Sign(mdc, sign_r, sign_s, x);
-	int ko = Verify_Sign(mdc, sign_r, sign_s, Daemon_y);
-	if (ko) printf("Zertifikat gefälscht!");
+	
+	dlogP(fake_x, Daemon_y);
 
+	if (mpz_cmp(x, fake_x)) {
+		printf("Right fake key.\n");
+	} else {
+		printf("Wrong fake key.\n");
+	}
+
+	if (!(con=ConnectTo(OurName,DAEMON_NAME))) {
+		fprintf(stderr,"Kann keine Verbindung zum Daemon aufbauen: %s\n",NET_ErrorText());
+		exit(20);
+	}
+
+	/***********  Message vom Typ ReportRequest initialisieren  ***************/
+	msg.typ  = VerifyRequest;                       /* Typ setzten */
+	msg.body.VerifyRequest.NumLines = 3;    /* Gruppennamen eintragen */
+	strcpy(msg.body.VerifyRequest.Report[0],("Der Teilnehmer %s hat in den Versuchen", OurName));    /* Nachricht eintragen */
+	strcpy(msg.body.VerifyRequest.Report[1],"1 bis 7 bereits die erforderliche Punkte-");    /* Nachricht eintragen */
+	strcpy(msg.body.VerifyRequest.Report[2],"zahl erreicht. Ein Schein wird daher gewährt."); /* Nachricht eintragen */
+	Generate_MDC(&msg, p, mdc);                     /* MDC generieren ... */
+	Generate_Sign(mdc, sign_r, sign_s, fake_x);          /* ... und Nachricht unterschreiben */
+	strcpy(msg.sign_r, mpz_get_str(NULL, 16, sign_r));
+	strcpy(msg.sign_s, mpz_get_str(NULL, 16, sign_s));
+
+	/*************  Machricht abschicken, Antwort einlesen  *******************/
+	if (Transmit(con,&msg,sizeof(msg))!=sizeof(msg)) {
+		fprintf(stderr,"Fehler beim Senden des 'VerifyRequest': %s\n",NET_ErrorText());
+		exit(20);
+	}
+
+	if (Receive(con,&msg,sizeof(msg))!=sizeof(msg)) {
+		fprintf(stderr,"Fehler beim Empfang des 'VerifyResponse': %s\n",NET_ErrorText());
+		exit(20);
+	}
+
+
+	/******************  Überprüfen der Dämon-Signatur  ***********************/
+	printf("Nachricht vom Dämon:\n");
+	printf("\t%s\n",msg.body.VerifyResponse.Res);
+	
 
 	mpz_clears(x, Daemon_y, Daemon_x, mdc, sign_s, sign_r, p, w, NULL);
 
 	return 0;
 }
 
-int mainTest(int argc, char **argv) 
+
+/*
+	Testings for the algorithms.
+*/
+int main2(int argc, char **argv) 
 {
 	mpz_t mdc, r, s, sk, pk, x, a, t, u, v;
 
@@ -503,8 +540,8 @@ int mainTest(int argc, char **argv)
 	mpz_init_set_ui(b_p, 29);
 	//babyStepGiantStep(b_x, b_a, b_w, b_p);
 
-	nfactors = 4;
-	mpz_set_ui(p, 571);
+	nfactors = 5;
+	mpz_set_ui(p, 98533);
 	mpz_set_ui(sk, 199);
 	mpz_powm(b_w, w, sk, p);
 	dlogP(b_x, b_w);
